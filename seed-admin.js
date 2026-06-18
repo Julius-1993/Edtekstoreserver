@@ -10,8 +10,8 @@ const mongoose = require('mongoose');
 const User = require('./models/User');
 
 const ADMIN = {
-  name: 'Aako Julius',
-  email: 'aakojuliusoluwanifemi@gmail.com',
+  name: 'Super Admin',
+  email: 'admin@edtek.com',
   password: 'Admin@1234',
   role: 'admin',
   department: 'Administration',

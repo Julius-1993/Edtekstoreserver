@@ -1,32 +1,42 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const User = require('../models/User');
+const jwt     = require('jsonwebtoken');
+const crypto  = require('crypto');
+const User    = require('../models/User');
 const { protect, authorize } = require('../middleware/auth');
-const { sendStatusEmail } = require('../utils/email');
+const { sendStatusEmail, sendWelcomeEmail } = require('../utils/email');
 
-const router = express.Router();
+const router  = express.Router();
 const signToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE || '7d' });
 
-// Admin creates user — only login is public
+// ─── ADMIN: Create user with temp password + reset link ──────────────────────
 router.post('/create-user', protect, authorize('admin'), async (req, res) => {
   try {
     const { name, email, password, role, department, phone } = req.body;
-    if (!name || !email || !password || !role) {
+    if (!name || !email || !password || !role)
       return res.status(400).json({ success: false, message: 'Name, email, password and role are required' });
-    }
+
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ success: false, message: 'Email already registered' });
-    const user = await User.create({ name, email, password, role, department, phone, createdBy: req.user._id });
-    // notify new user
+
+    // Generate reset token for first-time password setup (valid 72hrs)
+    const resetToken  = crypto.randomBytes(32).toString('hex');
+    const tokenHashed = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    const user = await User.create({
+      name, email, password, role, department, phone,
+      createdBy:         req.user._id,
+      isTempPassword:    true,
+      tempPasswordExpiry: new Date(Date.now() + 48 * 60 * 60 * 1000), // temp pwd valid 48h
+      resetPasswordToken:  tokenHashed,
+      resetPasswordExpiry: new Date(Date.now() + 72 * 60 * 60 * 1000)  // reset link valid 72h
+    });
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
     try {
-      await sendStatusEmail({
-        recipientEmail: email,
-        subject: 'Your EDTEK StoreTrack Account',
-        message: `<p>Hello <strong>${name}</strong>,</p><p>Your account has been created on <strong>EDTEK StoreTrack</strong>.</p><p><strong>Email:</strong> ${email}<br><strong>Role:</strong> ${role}<br><strong>Temporary Password:</strong> ${password}</p><p>Please log in and keep your credentials safe.</p>`,
-        requestNumber: 'ACCOUNT'
-      });
+      await sendWelcomeEmail({ name, email, password, role, resetUrl, expiryHours: 72 });
     } catch (e) { console.error('Welcome email error:', e.message); }
+
     res.status(201).json({ success: true, user });
   } catch (err) {
     console.error('Create user error:', err.message);
@@ -34,33 +44,82 @@ router.post('/create-user', protect, authorize('admin'), async (req, res) => {
   }
 });
 
-// Login
-router.post('/login', async (req, res) => {
+// ─── ADMIN: Resend reset link (new link, valid 24h) ──────────────────────────
+router.post('/users/:id/resend-reset', protect, authorize('admin'), async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password required' });
-    const user = await User.findOne({ email }).select('+password');
-    if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-    if (!user.isActive) return res.status(401).json({ success: false, message: 'Account deactivated. Contact admin.' });
-    if (user.isFlagged) return res.status(401).json({ success: false, message: 'Account flagged. Contact admin.' });
-    // log activity
-    user.lastLogin = new Date();
-    user.activityLog.push({ action: 'login', details: 'User logged in', timestamp: new Date() });
-    if (user.activityLog.length > 100) user.activityLog = user.activityLog.slice(-100);
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const resetToken  = crypto.randomBytes(32).toString('hex');
+    const tokenHashed = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    user.resetPasswordToken  = tokenHashed;
+    user.resetPasswordExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
     await user.save();
-    const token = signToken(user._id);
-    res.json({ success: true, token, user: user.toJSON() });
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    await sendWelcomeEmail({
+      name: user.name,
+      email: user.email,
+      password: null, // don't re-show temp password
+      role: user.role,
+      resetUrl,
+      expiryHours: 24,
+      isResend: true
+    });
+
+    res.json({ success: true, message: 'Reset link resent (valid 24h)' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// Get current user
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password required' });
+
+    const user = await User.findOne({ email }).select('+password +isTempPassword +tempPasswordExpiry');
+    if (!user || !(await user.comparePassword(password)))
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    if (!user.isActive) return res.status(401).json({ success: false, message: 'Account deactivated. Contact admin.' });
+    if (user.isFlagged)  return res.status(401).json({ success: false, message: 'Account flagged. Contact admin.' });
+
+    // Block login if temp password has expired (48h window passed without resetting)
+    if (user.isTempPassword && user.tempPasswordExpiry && new Date() > user.tempPasswordExpiry) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your temporary password has expired. Please contact your admin to resend a new reset link.',
+        code: 'TEMP_PASSWORD_EXPIRED'
+      });
+    }
+
+    user.lastLogin = new Date();
+    user.activityLog.push({ action: 'login', details: 'User logged in', timestamp: new Date() });
+    if (user.activityLog.length > 100) user.activityLog = user.activityLog.slice(-100);
+    await user.save();
+
+    const token = signToken(user._id);
+    const userObj = user.toJSON();
+
+    // Tell frontend if user must reset password
+    res.json({
+      success: true,
+      token,
+      user: userObj,
+      mustResetPassword: !!user.isTempPassword
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── GET ME ───────────────────────────────────────────────────────────────────
 router.get('/me', protect, (req, res) => res.json({ success: true, user: req.user }));
 
-// Get all users (admin only)
+// ─── GET ALL USERS (admin) ────────────────────────────────────────────────────
 router.get('/users', protect, authorize('admin'), async (req, res) => {
   try {
     const users = await User.find({})
@@ -69,12 +128,10 @@ router.get('/users', protect, authorize('admin'), async (req, res) => {
       .populate('flaggedBy', 'name email')
       .sort({ createdAt: -1 });
     res.json({ success: true, users });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Get single user (admin)
+// ─── GET SINGLE USER (admin) ──────────────────────────────────────────────────
 router.get('/users/:id', protect, authorize('admin'), async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
@@ -82,67 +139,69 @@ router.get('/users/:id', protect, authorize('admin'), async (req, res) => {
       .populate('createdBy flaggedBy', 'name email');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     res.json({ success: true, user });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Update user (admin)
+// ─── UPDATE USER (admin) ──────────────────────────────────────────────────────
 router.put('/users/:id', protect, authorize('admin'), async (req, res) => {
   try {
     const { name, email, role, department, phone, isActive } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    if (name)  user.name  = name;
-    if (email) user.email = email;
-    if (role)  user.role  = role;
+    if (name     !== undefined) user.name       = name;
+    if (email    !== undefined) user.email      = email;
+    if (role     !== undefined) user.role       = role;
     if (department !== undefined) user.department = department;
-    if (phone !== undefined)      user.phone = phone;
-    if (isActive !== undefined)   user.isActive = isActive;
-    user.activityLog.push({ action: 'profile_updated', details: `Updated by admin`, timestamp: new Date() });
+    if (phone    !== undefined) user.phone      = phone;
+    if (isActive !== undefined) user.isActive   = isActive;
+    user.activityLog.push({ action: 'profile_updated', details: 'Updated by admin', timestamp: new Date() });
     await user.save();
     res.json({ success: true, user: user.toJSON() });
-  } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
-  }
+  } catch (err) { res.status(400).json({ success: false, message: err.message }); }
 });
 
-// Reset user password (admin)
+// ─── ADMIN RESET USER PASSWORD ────────────────────────────────────────────────
 router.put('/users/:id/reset-password', protect, authorize('admin'), async (req, res) => {
   try {
     const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) {
+    if (!newPassword || newPassword.length < 6)
       return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
-    }
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    user.password = newPassword;
+
+    user.password        = newPassword;
+    user.isTempPassword  = true;
+    user.tempPasswordExpiry = new Date(Date.now() + 48 * 60 * 60 * 1000);
     user.activityLog.push({ action: 'password_reset', details: 'Password reset by admin', timestamp: new Date() });
     await user.save();
+
     try {
-      await sendStatusEmail({
-        recipientEmail: user.email,
-        subject: 'Your EDTEK StoreTrack Password Has Been Reset',
-        message: `<p>Hello <strong>${user.name}</strong>,</p><p>Your password has been reset by an administrator.</p><p><strong>New Password:</strong> ${newPassword}</p><p>Please log in and change your password immediately.</p>`,
-        requestNumber: 'PWD-RESET'
+      await sendWelcomeEmail({
+        name: user.name,
+        email: user.email,
+        password: newPassword,
+        role: user.role,
+        resetUrl: null,
+        isResend: false,
+        isAdminReset: true
       });
-    } catch (e) { console.error('Password reset email error:', e.message); }
-    res.json({ success: true, message: 'Password reset successfully' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+    } catch (e) { console.error('Reset email error:', e.message); }
+
+    res.json({ success: true, message: 'Password reset. User notified by email.' });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Flag user (admin)
+// ─── FLAG / UNFLAG USER (admin) ───────────────────────────────────────────────
 router.put('/users/:id/flag', protect, authorize('admin'), async (req, res) => {
   try {
     const { reason } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    if (user._id.toString() === req.user._id.toString()) {
+    if (user._id.toString() === req.user._id.toString())
       return res.status(400).json({ success: false, message: 'Cannot flag yourself' });
-    }
-    user.isFlagged = !user.isFlagged;
+
+    user.isFlagged  = !user.isFlagged;
     user.flagReason = user.isFlagged ? reason : undefined;
     user.flaggedAt  = user.isFlagged ? new Date() : undefined;
     user.flaggedBy  = user.isFlagged ? req.user._id : undefined;
@@ -150,43 +209,60 @@ router.put('/users/:id/flag', protect, authorize('admin'), async (req, res) => {
     user.activityLog.push({ action: user.isFlagged ? 'flagged' : 'unflagged', details: reason || '', timestamp: new Date() });
     await user.save();
     res.json({ success: true, user: user.toJSON(), message: user.isFlagged ? 'User flagged' : 'User unflagged' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Delete user (admin)
+// ─── DELETE USER (admin) ──────────────────────────────────────────────────────
 router.delete('/users/:id', protect, authorize('admin'), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    if (user._id.toString() === req.user._id.toString()) {
+    if (user._id.toString() === req.user._id.toString())
       return res.status(400).json({ success: false, message: 'Cannot delete yourself' });
-    }
     await User.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'User deleted' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Forgot password
+// ─── SELF: Change own password (after temp password login) ───────────────────
+router.put('/change-password', protect, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6)
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (currentPassword) {
+      const ok = await user.comparePassword(currentPassword);
+      if (!ok) return res.status(401).json({ success: false, message: 'Current password is wrong' });
+    }
+
+    user.password          = newPassword;
+    user.isTempPassword    = false;
+    user.tempPasswordExpiry = undefined;
+    user.activityLog.push({ action: 'password_changed', details: 'User changed own password', timestamp: new Date() });
+    await user.save();
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── PUBLIC: Forgot password ──────────────────────────────────────────────────
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
     if (!user) return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-    user.resetPasswordExpiry = Date.now() + 60 * 60 * 1000;
+
+    const resetToken  = crypto.randomBytes(32).toString('hex');
+    const tokenHashed = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordToken  = tokenHashed;
+    user.resetPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1h
     await user.save();
+
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-    await sendStatusEmail({
-      recipientEmail: user.email,
-      subject: 'Password Reset — EDTEK StoreTrack',
-      message: `<p>You requested a password reset.</p><p style="margin:24px 0;"><a href="${resetUrl}" style="background:#0a1628;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;">Reset My Password</a></p><p style="color:#64748b;font-size:13px;">Expires in 1 hour.</p><p style="color:#64748b;font-size:12px;margin-top:12px;">Link: ${resetUrl}</p>`,
-      requestNumber: 'PWD-RESET'
-    });
+    await sendWelcomeEmail({ name: user.name, email: user.email, password: null, role: user.role, resetUrl, expiryHours: 1, isForgot: true });
     res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
   } catch (err) {
     console.error('Forgot password error:', err.message);
@@ -194,20 +270,27 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// Reset password
+// ─── PUBLIC: Reset password via token ─────────────────────────────────────────
 router.post('/reset-password/:token', async (req, res) => {
   try {
     const { password } = req.body;
-    if (!password || password.length < 6) return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    if (!password || password.length < 6)
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+
     const hashed = crypto.createHash('sha256').update(req.params.token).digest('hex');
-    const user = await User.findOne({ resetPasswordToken: hashed, resetPasswordExpiry: { $gt: Date.now() } });
+    const user   = await User.findOne({ resetPasswordToken: hashed, resetPasswordExpiry: { $gt: Date.now() } });
     if (!user) return res.status(400).json({ success: false, message: 'Reset link invalid or expired' });
-    user.password = password;
-    user.resetPasswordToken = undefined;
+
+    user.password            = password;
+    user.isTempPassword      = false;
+    user.tempPasswordExpiry  = undefined;
+    user.resetPasswordToken  = undefined;
     user.resetPasswordExpiry = undefined;
+    user.activityLog.push({ action: 'password_reset_via_link', details: 'Password reset via email link', timestamp: new Date() });
     await user.save();
+
     const token = signToken(user._id);
-    res.json({ success: true, message: 'Password reset successful!', token, user: user.toJSON() });
+    res.json({ success: true, message: 'Password reset! You can now log in.', token, user: user.toJSON() });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

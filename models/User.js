@@ -9,27 +9,33 @@ const activitySchema = new mongoose.Schema({
 });
 
 const userSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  email: { type: String, required: true, unique: true, lowercase: true },
-  password: { type: String, required: true, minlength: 6 },
+  name:       { type: String, required: true, trim: true },
+  email:      { type: String, required: true, unique: true, lowercase: true },
+  password:   { type: String, required: true, minlength: 6 },
   role: {
     type: String,
     enum: ['admin', 'storekeeper', 'sales', 'technical'],
     required: true
   },
   department: { type: String, trim: true },
-  phone: { type: String, trim: true },
-  isActive: { type: Boolean, default: true },
-  isFlagged: { type: Boolean, default: false },
-  flagReason: { type: String },
-  flaggedAt: { type: Date },
-  flaggedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  lastLogin: { type: Date },
-  lastLoginIp: { type: String },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  phone:      { type: String, trim: true },
+  isActive:   { type: Boolean, default: true },
+  isFlagged:  { type: Boolean, default: false },
+  flagReason: String,
+  flaggedAt:  Date,
+  flaggedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  lastLogin:  Date,
+  lastLoginIp: String,
+  createdBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   activityLog: [activitySchema],
-  resetPasswordToken: String,
-  resetPasswordExpiry: Date
+
+  // Temporary password system
+  isTempPassword:     { type: Boolean, default: false },   // still on first-time temp password
+  tempPasswordExpiry: Date,                                 // 48hrs from account creation
+
+  // Password reset link
+  resetPasswordToken:  String,
+  resetPasswordExpiry: Date   // admin resend = 24h, forgot = 1h
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

@@ -163,3 +163,132 @@ const sendStatusEmail = async ({ recipientEmail, subject, message, requestNumber
 };
 
 module.exports = { sendDeliveryConfirmationEmail, sendStatusEmail };
+
+// ─── Welcome / Account creation email ─────────────────────────────────────────
+const sendWelcomeEmail = async ({ name, email, password, role, resetUrl, expiryHours = 72, isResend = false, isAdminReset = false, isForgot = false }) => {
+  const transporter = createTransporter();
+
+  let subject, bodyHtml;
+
+  if (isForgot) {
+    subject  = 'Reset Your EDTEK StoreTrack Password';
+    bodyHtml = `
+      <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hello <strong>${name}</strong>,</p>
+      <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 24px;">
+        We received a request to reset your EDTEK StoreTrack password.
+        Click the button below to set a new password.
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${resetUrl}" target="_blank"
+           style="display:inline-block;background:#0a1628;color:#ffffff;text-decoration:none;
+                  padding:14px 36px;border-radius:8px;font-size:15px;font-weight:700;">
+          Reset My Password
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:12px;text-align:center;">
+        This link expires in <strong>${expiryHours} hour${expiryHours === 1 ? '' : 's'}</strong>. If you didn't request this, ignore this email.
+      </p>`;
+  } else if (isAdminReset) {
+    subject  = 'Your EDTEK StoreTrack Password Has Been Reset';
+    bodyHtml = `
+      <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hello <strong>${name}</strong>,</p>
+      <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 20px;">
+        An administrator has reset your password on <strong>EDTEK StoreTrack</strong>.
+      </p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <table style="font-size:14px;border-collapse:collapse;">
+          <tr><td style="color:#94a3b8;padding:4px 16px 4px 0;width:160px;">Email</td><td style="color:#0a1628;font-weight:600;">${email}</td></tr>
+          <tr><td style="color:#94a3b8;padding:4px 16px 4px 0;">Temporary Password</td><td style="color:#0a1628;font-weight:700;font-family:monospace;font-size:15px;">${password}</td></tr>
+        </table>
+      </div>
+      <p style="color:#dc2626;font-size:13px;font-weight:600;margin:0 0 16px;">
+        ⚠ This temporary password expires in 48 hours. Log in and change it immediately.
+      </p>`;
+  } else if (isResend) {
+    subject  = 'New Password Reset Link — EDTEK StoreTrack';
+    bodyHtml = `
+      <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hello <strong>${name}</strong>,</p>
+      <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 24px;">
+        A new password reset link has been sent for your EDTEK StoreTrack account.<br>
+        Click the button below to set your password.
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${resetUrl}" target="_blank"
+           style="display:inline-block;background:#0a1628;color:#ffffff;text-decoration:none;
+                  padding:14px 36px;border-radius:8px;font-size:15px;font-weight:700;">
+          Set My Password
+        </a>
+      </div>
+      <p style="color:#dc2626;font-size:13px;font-weight:600;text-align:center;margin:0 0 8px;">
+        ⚠ This link expires in <strong>${expiryHours} hours</strong>.
+      </p>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;text-align:center;margin-top:16px;">
+        <p style="color:#1d4ed8;font-size:12px;margin:0 0 4px;font-weight:600;">If the button doesn't work, copy this link:</p>
+        <p style="margin:0;word-break:break-all;"><a href="${resetUrl}" style="color:#2563eb;font-size:11px;">${resetUrl}</a></p>
+      </div>`;
+  } else {
+    // First-time account creation
+    subject  = 'Welcome to EDTEK StoreTrack — Your Account Details';
+    bodyHtml = `
+      <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hello <strong>${name}</strong>,</p>
+      <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 20px;">
+        Your account has been created on <strong>EDTEK Interactive StoreTrack</strong>. Here are your login details:
+      </p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <table style="font-size:14px;border-collapse:collapse;">
+          <tr><td style="color:#94a3b8;padding:4px 16px 4px 0;width:160px;">Full Name</td><td style="color:#0a1628;font-weight:600;">${name}</td></tr>
+          <tr><td style="color:#94a3b8;padding:4px 16px 4px 0;">Email</td><td style="color:#0a1628;font-weight:600;">${email}</td></tr>
+          <tr><td style="color:#94a3b8;padding:4px 16px 4px 0;">Role</td><td style="color:#0a1628;font-weight:600;text-transform:capitalize;">${role}</td></tr>
+          <tr><td style="color:#94a3b8;padding:4px 16px 4px 0;">Temporary Password</td><td style="color:#dc2626;font-weight:700;font-family:monospace;font-size:15px;">${password}</td></tr>
+        </table>
+      </div>
+      <p style="color:#dc2626;font-size:13px;font-weight:700;margin:0 0 8px;">
+        ⚠ This temporary password expires in 48 hours.
+      </p>
+      <p style="color:#475569;font-size:14px;margin:0 0 24px;">
+        Please reset your password immediately using the button below:
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${resetUrl}" target="_blank"
+           style="display:inline-block;background:#1a56db;color:#ffffff;text-decoration:none;
+                  padding:14px 36px;border-radius:8px;font-size:15px;font-weight:700;">
+          Set My Password Now →
+        </a>
+      </div>
+      <p style="color:#dc2626;font-size:13px;font-weight:600;text-align:center;margin:0 0 8px;">
+        This setup link expires in <strong>${expiryHours} hours</strong>.
+      </p>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;text-align:center;margin-top:16px;">
+        <p style="color:#1d4ed8;font-size:12px;margin:0 0 4px;font-weight:600;">If the button doesn't work, copy this link:</p>
+        <p style="margin:0;word-break:break-all;"><a href="${resetUrl}" style="color:#2563eb;font-size:11px;">${resetUrl}</a></p>
+      </div>`;
+  }
+
+  const headerHtmlLocal = `
+    <div style="background:#0a1628;padding:28px 40px;text-align:center;">
+      <h1 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;letter-spacing:1px;">EDTEK INTERACTIVE</h1>
+      <p style="color:#4a9eff;margin:6px 0 0;font-size:13px;">Inventory Management System</p>
+    </div>`;
+  const footerHtmlLocal = `
+    <div style="background:#0a1628;padding:16px 40px;text-align:center;">
+      <p style="color:#6b8bb5;font-size:11px;margin:0;">EDTEK Interactive · Automated Notification · Do not reply</p>
+    </div>`;
+
+  console.log('Welcome email →', email, '|', subject);
+  return transporter.sendMail({
+    from: process.env.EMAIL_FROM,
+    to:   email,
+    subject,
+    text: `${subject}\n\n${bodyHtml.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()}`,
+    html: `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+<div style="max-width:620px;margin:32px auto;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  ${headerHtmlLocal}
+  <div style="background:#ffffff;padding:40px;">${bodyHtml}</div>
+  ${footerHtmlLocal}
+</div>
+</body></html>`
+  });
+};
+
+module.exports = { sendDeliveryConfirmationEmail, sendStatusEmail, sendWelcomeEmail };

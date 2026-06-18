@@ -7,9 +7,8 @@ const app = express();
 
 app.use(cors({
   origin: [
-    'http://localhost:5174',
     'http://localhost:5173',
-    'https://edtekstore.vercel.app',
+    'https://edtek-store-frontend.vercel.app',
     /\.vercel\.app$/
   ],
   credentials: true
@@ -21,6 +20,20 @@ app.use('/api/stock', require('./routes/stock'));
 app.use('/api/requests', require('./routes/requests'));
 app.use('/api/deliveries', require('./routes/delivery'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+
+// Public waybill endpoint (no auth needed for printing)
+app.get('/api/waybill/:token', async (req, res) => {
+  try {
+    const Request = require('./models/Request');
+    const request = await Request.findOne({ waybillToken: req.params.token })
+      .populate('requestedBy', 'name email department')
+      .populate('approvedBy technicalBy shippedBy', 'name email');
+    if (!request) return res.status(404).json({ success: false, message: 'Waybill not found' });
+    if (!['processing','shipped','confirmed','completed'].includes(request.status))
+      return res.status(400).json({ success: false, message: 'Waybill not yet available' });
+    res.json({ success: true, request });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
 
 app.get('/api/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
 

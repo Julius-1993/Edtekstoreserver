@@ -79,6 +79,10 @@ const requestSchema = new mongoose.Schema({
 
   deliveryToken:        String,
   deliveryTokenExpiry:  Date,
+
+  // Waybill token — for sharable print URL
+  waybillToken: { type: String },
+  waybillNumber: { type: String },  // formatted waybill number e.g. WB-2605-0001
   emailSentAt:          Date,
 
   workflowLog: [workflowLogSchema]
@@ -91,6 +95,7 @@ requestSchema.pre('save', async function (next) {
     const yr = d.getFullYear().toString().slice(-2);
     const mo = String(d.getMonth() + 1).padStart(2, '0');
     this.requestNumber = `REQ-${yr}${mo}-${String(count + 1).padStart(4, '0')}`;
+    this.waybillNumber = `WB-${yr}${mo}-${String(count + 1).padStart(4, '0')}`;
   }
   next();
 });

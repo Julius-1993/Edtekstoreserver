@@ -310,4 +310,23 @@ router.post('/:id/resend-email', protect, authorize('storekeeper', 'technical', 
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ── WAYBILL: generate shareable token ────────────────────────────────────────
+router.post('/:id/waybill', protect, authorize('storekeeper', 'technical', 'admin'), async (req, res) => {
+  try {
+    const request = await Request.findById(req.params.id)
+      .populate('requestedBy', 'name email department')
+      .populate('approvedBy technicalBy shippedBy', 'name email');
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (!['processing','shipped','confirmed','completed'].includes(request.status)) {
+      return res.status(400).json({ success: false, message: 'Waybill only available from processing stage' });
+    }
+    if (!request.waybillToken) {
+      request.waybillToken = crypto.randomBytes(24).toString('hex');
+      await request.save();
+    }
+    const waybillUrl = `${process.env.FRONTEND_URL}/waybill/${request.waybillToken}`;
+    res.json({ success: true, waybillToken: request.waybillToken, waybillUrl, request });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 module.exports = router;
