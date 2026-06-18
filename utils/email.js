@@ -1,28 +1,63 @@
 const nodemailer = require('nodemailer');
 
-const createTransporter = () => {
+const dns = require('dns');
+const { promisify } = require('util');
+const resolve4 = promisify(dns.resolve4);
+
+const createTransporter = async () => {
+  let host = 'smtp.gmail.com';
+  try {
+    const addresses = await resolve4('smtp.gmail.com');
+    host = addresses[0]; // force IPv4 address directly
+  } catch (e) {
+    console.error('DNS resolve4 failed, falling back to hostname:', e.message);
+  }
+
   const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    family: 4,
+    host,
+    port: 465,
+    secure: true,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     },
-    tls: { rejectUnauthorized: false }
+    tls: {
+      rejectUnauthorized: false,
+      servername: 'smtp.gmail.com' // required since host is now an IP, not a hostname — TLS cert validation needs this
+    }
   });
 
-  transporter.verify((err, success) => {
-    if (err) {
-      console.error('SMTP ERROR:', err);
-    } else {
-      console.log('SMTP READY');
-    }
+  transporter.verify((err) => {
+    if (err) console.error('SMTP ERROR:', err);
+    else console.log('SMTP READY');
   });
 
   return transporter;
 };
+
+// const createTransporter = () => {
+//   const transporter = nodemailer.createTransport({
+//     host: 'smtp.gmail.com',
+//     port: 587,
+//     secure: false,
+//     family: 4,
+//     auth: {
+//       user: process.env.EMAIL_USER,
+//       pass: process.env.EMAIL_PASS
+//     },
+//     tls: { rejectUnauthorized: false }
+//   });
+
+//   transporter.verify((err, success) => {
+//     if (err) {
+//       console.error('SMTP ERROR:', err);
+//     } else {
+//       console.log('SMTP READY');
+//     }
+//   });
+
+//   return transporter;
+// };
 
 const headerHtml = `
   <div style="background:#0a1628;padding:28px 40px;text-align:center;">
