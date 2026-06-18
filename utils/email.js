@@ -3,8 +3,8 @@ const nodemailer = require('nodemailer');
 const createTransporter = () => {
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    port: 587,
+    secure: false,
     family: 4,
     auth: {
       user: process.env.EMAIL_USER,
@@ -72,13 +72,13 @@ const sendDeliveryConfirmationEmail = async ({ request, recipientEmail, confirma
         </thead>
         <tbody>
           ${request.softwareChecklist.map(sw => {
-            const name = sw.name === 'Other' && sw.customName ? sw.customName : sw.name;
-            const statusColor = sw.status === 'Activated' ? '#16a34a' : sw.status === 'Non Activated' ? '#dc2626' : '#64748b';
-            return `<tr style="border-bottom:1px solid #e2e8f0;">
+    const name = sw.name === 'Other' && sw.customName ? sw.customName : sw.name;
+    const statusColor = sw.status === 'Activated' ? '#16a34a' : sw.status === 'Non Activated' ? '#dc2626' : '#64748b';
+    return `<tr style="border-bottom:1px solid #e2e8f0;">
               <td style="padding:8px 12px;font-size:13px;">${name}</td>
               <td style="padding:8px 12px;font-size:13px;font-weight:700;color:${statusColor};">${sw.status}</td>
             </tr>`;
-          }).join('')}
+  }).join('')}
         </tbody>
       </table>
     </div>
@@ -107,7 +107,7 @@ const sendDeliveryConfirmationEmail = async ({ request, recipientEmail, confirma
         <tr><td style="color:#94a3b8;padding:3px 0;width:130px;">Request #</td><td style="color:#0a1628;font-weight:700;">${request.requestNumber}</td></tr>
         <tr><td style="color:#94a3b8;padding:3px 0;">Organization</td><td style="color:#1e293b;font-weight:600;">${request.toOrganization}</td></tr>
         <tr><td style="color:#94a3b8;padding:3px 0;">Department</td><td style="color:#1e293b;">${request.toDepartment}</td></tr>
-        <tr><td style="color:#94a3b8;padding:3px 0;">Shipped On</td><td style="color:#1e293b;">${new Date(request.shippedAt || request.updatedAt).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}</td></tr>
+        <tr><td style="color:#94a3b8;padding:3px 0;">Shipped On</td><td style="color:#1e293b;">${new Date(request.shippedAt || request.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td></tr>
       </table>
     </div>
 
@@ -174,14 +174,14 @@ const sendStatusEmail = async ({ recipientEmail, subject, message, requestNumber
 
 module.exports = { sendDeliveryConfirmationEmail, sendStatusEmail };
 
-// ─── Welcome / Account creation email ─────────────────────────────────────────
+// Welcome / Account creation email
 const sendWelcomeEmail = async ({ name, email, password, role, resetUrl, expiryHours = 72, isResend = false, isAdminReset = false, isForgot = false }) => {
   const transporter = createTransporter();
 
   let subject, bodyHtml;
 
   if (isForgot) {
-    subject  = 'Reset Your EDTEK StoreTrack Password';
+    subject = 'Reset Your EDTEK StoreTrack Password';
     bodyHtml = `
       <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hello <strong>${name}</strong>,</p>
       <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 24px;">
@@ -199,7 +199,7 @@ const sendWelcomeEmail = async ({ name, email, password, role, resetUrl, expiryH
         This link expires in <strong>${expiryHours} hour${expiryHours === 1 ? '' : 's'}</strong>. If you didn't request this, ignore this email.
       </p>`;
   } else if (isAdminReset) {
-    subject  = 'Your EDTEK StoreTrack Password Has Been Reset';
+    subject = 'Your EDTEK StoreTrack Password Has Been Reset';
     bodyHtml = `
       <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hello <strong>${name}</strong>,</p>
       <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 20px;">
@@ -215,7 +215,7 @@ const sendWelcomeEmail = async ({ name, email, password, role, resetUrl, expiryH
         ⚠ This temporary password expires in 48 hours. Log in and change it immediately.
       </p>`;
   } else if (isResend) {
-    subject  = 'New Password Reset Link — EDTEK StoreTrack';
+    subject = 'New Password Reset Link — EDTEK StoreTrack';
     bodyHtml = `
       <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hello <strong>${name}</strong>,</p>
       <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 24px;">
@@ -238,7 +238,7 @@ const sendWelcomeEmail = async ({ name, email, password, role, resetUrl, expiryH
       </div>`;
   } else {
     // First-time account creation
-    subject  = 'Welcome to EDTEK StoreTrack — Your Account Details';
+    subject = 'Welcome to EDTEK StoreTrack — Your Account Details';
     bodyHtml = `
       <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Hello <strong>${name}</strong>,</p>
       <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 20px;">
@@ -287,7 +287,7 @@ const sendWelcomeEmail = async ({ name, email, password, role, resetUrl, expiryH
   console.log('Welcome email →', email, '|', subject);
   return transporter.sendMail({
     from: process.env.EMAIL_FROM,
-    to:   email,
+    to: email,
     subject,
     text: `${subject}\n\n${bodyHtml.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()}`,
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
