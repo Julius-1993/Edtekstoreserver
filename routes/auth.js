@@ -44,7 +44,7 @@ router.post('/create-user', protect, authorize('admin'), async (req, res) => {
   }
 });
 
-// ─── ADMIN: Resend reset link (new link, valid 24h) ──────────────────────────
+// ADMIN: Resend reset link (new link, valid 24h)
 router.post('/users/:id/resend-reset', protect, authorize('admin'), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -54,7 +54,7 @@ router.post('/users/:id/resend-reset', protect, authorize('admin'), async (req, 
     const tokenHashed = crypto.createHash('sha256').update(resetToken).digest('hex');
 
     user.resetPasswordToken  = tokenHashed;
-    user.resetPasswordExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+    user.resetPasswordExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await user.save();
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
@@ -75,7 +75,7 @@ router.post('/users/:id/resend-reset', protect, authorize('admin'), async (req, 
   }
 });
 
-// ─── LOGIN ────────────────────────────────────────────────────────────────────
+// LOGIN
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;

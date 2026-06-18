@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 
 const createTransporter = () => {
-  return nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
     secure: true,
@@ -12,6 +12,16 @@ const createTransporter = () => {
     },
     tls: { rejectUnauthorized: false }
   });
+
+  transporter.verify((err, success) => {
+    if (err) {
+      console.error('SMTP ERROR:', err);
+    } else {
+      console.log('SMTP READY');
+    }
+  });
+
+  return transporter;
 };
 
 const headerHtml = `
