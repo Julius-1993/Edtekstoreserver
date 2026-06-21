@@ -17,6 +17,16 @@ const createTransporter = () => {
   });
 };
 
+const transporter = createTransporter();
+
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('SMTP VERIFY ERROR:', error);
+  } else {
+    console.log('SMTP READY');
+  }
+});
+
 const headerHtml = `
   <div style="background:#0a1628;padding:28px 40px;text-align:center;">
     <h1 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;letter-spacing:1px;">EDTEK INTERACTIVE</h1>
