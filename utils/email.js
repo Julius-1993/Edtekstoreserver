@@ -1,18 +1,21 @@
+const dns = require('dns');
 const nodemailer = require('nodemailer');
 
 const createTransporter = () => {
-  console.log('EMAIL_USER:', process.env.EMAIL_USER);
-  console.log('EMAIL_FROM:', process.env.EMAIL_FROM);
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
-    tls: { rejectUnauthorized: false },
+    family: 4,
+    dnsLookup: (hostname, options, callback) => {
+      return dns.lookup(hostname, { family: 4 }, callback);
+    }
   });
 };
-
 
 const headerHtml = `
   <div style="background:#0a1628;padding:28px 40px;text-align:center;">
