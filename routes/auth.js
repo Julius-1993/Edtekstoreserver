@@ -296,4 +296,20 @@ router.post('/reset-password/:token', async (req, res) => {
   }
 });
 
+router.get('/test-email', async (req, res) => {
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: 'aakojuliusoluwanifemi@gmail.com',
+      subject: 'Brevo Test',
+      text: 'Brevo SMTP is working'
+    });
+
+    res.send('Email sent');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
 module.exports = router;
