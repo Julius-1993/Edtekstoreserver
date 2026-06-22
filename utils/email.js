@@ -19,13 +19,17 @@ const transporter = nodemailer.createTransport({
   socketTimeout: 30000
 });
 
-transporter.verify((err) => {
-  if (err) {
-    console.error('SMTP VERIFY ERROR:', err);
+console.log('Starting SMTP verification...');
+
+transporter.verify(function (error, success) {
+  if (error) {
+    console.error('SMTP VERIFY ERROR:', error);
   } else {
-    console.log('SMTP READY');
+    console.log('SMTP READY', success);
   }
 });
+
+console.log('SMTP verification requested');
 
 const headerHtml = `
   <div style="background:#0a1628;padding:28px 40px;text-align:center;">
