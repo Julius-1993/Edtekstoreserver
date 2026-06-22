@@ -1,13 +1,22 @@
 const nodemailer = require('nodemailer');
 
+console.log('SMTP_HOST:', process.env.SMTP_HOST);
+console.log('SMTP_PORT:', process.env.SMTP_PORT);
+console.log('SMTP_USER:', process.env.SMTP_USER);
+console.log('EMAIL_FROM:', process.env.EMAIL_FROM);
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT),
   secure: false,
+  requireTLS: true,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS
-  }
+  },
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000
 });
 
 transporter.verify((err) => {
@@ -34,7 +43,7 @@ const footerHtml = `
 `;
 
 const sendDeliveryConfirmationEmail = async ({ request, recipientEmail, confirmationToken }) => {
-  const transporter = createTransporter();
+  
   const confirmUrl = `${process.env.FRONTEND_URL}/confirm-delivery/${confirmationToken}`;
 
   console.log('\n==================================================');
@@ -145,7 +154,6 @@ const sendDeliveryConfirmationEmail = async ({ request, recipientEmail, confirma
 };
 
 const sendStatusEmail = async ({ recipientEmail, subject, message, requestNumber }) => {
-  const transporter = createTransporter();
   console.log('Status email →', recipientEmail, '|', subject);
   return transporter.sendMail({
     from: process.env.EMAIL_FROM,
@@ -168,7 +176,6 @@ const sendStatusEmail = async ({ recipientEmail, subject, message, requestNumber
 
 // Welcome / Account creation email
 const sendWelcomeEmail = async ({ name, email, password, role, resetUrl, expiryHours = 72, isResend = false, isAdminReset = false, isForgot = false }) => {
-  const transporter = createTransporter();
 
   let subject, bodyHtml;
 
