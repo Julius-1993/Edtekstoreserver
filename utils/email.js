@@ -1,27 +1,18 @@
-const dns = require('dns');
 const nodemailer = require('nodemailer');
 
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    family: 4,
-    dnsLookup: (hostname, options, callback) => {
-      return dns.lookup(hostname, { family: 4 }, callback);
-    }
-  });
-};
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
 
-const transporter = createTransporter();
-
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('SMTP VERIFY ERROR:', error);
+transporter.verify((err) => {
+  if (err) {
+    console.error('SMTP VERIFY ERROR:', err);
   } else {
     console.log('SMTP READY');
   }
@@ -91,7 +82,7 @@ const sendDeliveryConfirmationEmail = async ({ request, recipientEmail, confirma
     from: process.env.EMAIL_FROM,
     to: recipientEmail,
     subject: `Delivery Confirmation Required — ${request.requestNumber}`,
-    text: `EDTEK Interactive — Delivery Confirmation\n\nRequest ${request.requestNumber} has been delivered to ${request.toOrganization}.\n\nConfirm delivery here:\n${confirmUrl}\n\nItems:\n${request.items.map(i => `- ${i.name} (${i.serialNumber}) x${i.quantityApproved}`).join('\n')}\n\nLink expires in 72 hours.`,
+    text: `EDTEK Interactive Delivery Confirmation\n\nRequest ${request.requestNumber} has been delivered to ${request.toOrganization}.\n\nConfirm delivery here:\n${confirmUrl}\n\nItems:\n${request.items.map(i => `- ${i.name} (${i.serialNumber}) x${i.quantityApproved}`).join('\n')}\n\nLink expires in 72 hours.`,
     html: `
 <!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
@@ -175,7 +166,7 @@ const sendStatusEmail = async ({ recipientEmail, subject, message, requestNumber
   });
 };
 
-// ─── Welcome / Account creation email ─────────────────────────────────────────
+// Welcome / Account creation email
 const sendWelcomeEmail = async ({ name, email, password, role, resetUrl, expiryHours = 72, isResend = false, isAdminReset = false, isForgot = false }) => {
   const transporter = createTransporter();
 
