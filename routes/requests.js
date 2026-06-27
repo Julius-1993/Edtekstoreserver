@@ -7,7 +7,7 @@ const { sendDeliveryConfirmationEmail, sendStatusEmail } = require('../utils/ema
 
 const router = express.Router();
 
-// ── NON-PARAM ROUTES FIRST ──────────────────────────────────────────────────
+//NON-PARAM ROUTES FIRST 
 
 // GET all requests
 router.get('/', protect, async (req, res) => {
@@ -107,7 +107,7 @@ router.put('/bulk/approve', protect, authorize('storekeeper', 'admin'), async (r
   } catch (err) { res.status(500).json({ success:false, message:err.message }); }
 });
 
-// ── PARAM ROUTES ────────────────────────────────────────────────────────────
+// PARAM ROUTES
 
 // GET single
 router.get('/:id', protect, async (req, res) => {
