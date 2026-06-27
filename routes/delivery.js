@@ -9,7 +9,7 @@ router.get('/confirm/:token', async (req, res) => {
   try {
     const request = await Request.findOne({
       deliveryToken: req.params.token,
-      deliveryTokenExpiry: { $gt: new Date() }
+      deliveryTokenExpiry: { $gt: new Date()+ 7 * 24 * 60 * 60 * 1000 } // 7 days
     }).populate('requestedBy', 'name email')
       .populate('softwareUpdatedBy', 'name email');
     if (!request) return res.status(400).json({ success: false, message: 'Link invalid or expired. Contact the store to resend.' });
@@ -26,7 +26,7 @@ router.post('/confirm/:token', async (req, res) => {
     const { deliveryNotes, missingItemsNote, confirmedBy } = req.body;
     const request = await Request.findOne({
       deliveryToken: req.params.token,
-      deliveryTokenExpiry: { $gt: new Date() }
+      deliveryTokenExpiry: { $gt: new Date()+ 7 * 24 * 60 * 60 * 1000 } // 7 days
     }).populate('requestedBy approvedBy technicalBy', 'name email');
     if (!request) return res.status(400).json({ success: false, message: 'Link invalid or expired' });
     if (['confirmed','completed'].includes(request.status)) return res.status(400).json({ success: false, message: 'Already confirmed' });
