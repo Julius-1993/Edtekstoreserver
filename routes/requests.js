@@ -266,14 +266,14 @@ router.put('/:id/ship', protect, authorize('technical', 'admin'), async (req, re
     request.workflowLog.push({ stage:'Shipped', status:'shipped', performedBy:req.user._id, notes:shippingNotes });
     const token = crypto.randomBytes(32).toString('hex');
     request.deliveryToken = token;
-    request.deliveryTokenExpiry = new Date(Date.now() + 72 * 60 * 60 * 1000);
+    request.deliveryTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const recipientEmail = request.contactEmail || request.requestedBy.email;
     try {
       await sendDeliveryConfirmationEmail({ request, recipientEmail, confirmationToken: token });
       request.emailSentAt = new Date();
       // also notify requester if different
       if (request.contactEmail && request.contactEmail !== request.requestedBy.email) {
-        await sendStatusEmail({ recipientEmail:request.requestedBy.email, subject:`Request #${request.requestNumber} — Shipped 🚚`, message:`Your request <strong>#${request.requestNumber}</strong> to <strong>${request.toOrganization}</strong> has been <span style="color:#2563eb;font-weight:700;">shipped</span>.<br><br>A delivery confirmation email has been sent to the recipient.`, requestNumber:request.requestNumber });
+        await sendStatusEmail({ recipientEmail:request.requestedBy.email, subject:`Request #${request.requestNumber} — Shipped `, message:`Your request <strong>#${request.requestNumber}</strong> to <strong>${request.toOrganization}</strong> has been <span style="color:#2563eb;font-weight:700;">shipped</span>.<br><br>A delivery confirmation email has been sent to the recipient.`, requestNumber:request.requestNumber });
       }
     } catch(e){ console.error('Delivery email error:', e.message); }
     await request.save();
@@ -301,7 +301,7 @@ router.post('/:id/resend-email', protect, authorize('storekeeper', 'technical', 
     if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
     const token = crypto.randomBytes(32).toString('hex');
     request.deliveryToken = token;
-    request.deliveryTokenExpiry = new Date(Date.now() + 72 * 60 * 60 * 1000);
+    request.deliveryTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const recipientEmail = req.body.email || request.contactEmail || request.requestedBy.email;
     await sendDeliveryConfirmationEmail({ request, recipientEmail, confirmationToken: token });
     request.emailSentAt = new Date();

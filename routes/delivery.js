@@ -9,7 +9,7 @@ router.get('/confirm/:token', async (req, res) => {
   try {
     const request = await Request.findOne({
       deliveryToken: req.params.token,
-      deliveryTokenExpiry: { $gt: new Date()+ 7 * 24 * 60 * 60 * 1000 } // 7 days
+      deliveryTokenExpiry: { $gt: new Date() }
     }).populate('requestedBy', 'name email')
       .populate('softwareUpdatedBy', 'name email');
     if (!request) return res.status(400).json({ success: false, message: 'Link invalid or expired. Contact the store to resend.' });
@@ -26,7 +26,7 @@ router.post('/confirm/:token', async (req, res) => {
     const { deliveryNotes, missingItemsNote, confirmedBy } = req.body;
     const request = await Request.findOne({
       deliveryToken: req.params.token,
-      deliveryTokenExpiry: { $gt: new Date()+ 7 * 24 * 60 * 60 * 1000 } // 7 days
+      deliveryTokenExpiry: { $gt: new Date() }
     }).populate('requestedBy approvedBy technicalBy', 'name email');
     if (!request) return res.status(400).json({ success: false, message: 'Link invalid or expired' });
     if (['confirmed','completed'].includes(request.status)) return res.status(400).json({ success: false, message: 'Already confirmed' });
@@ -42,7 +42,7 @@ router.post('/confirm/:token', async (req, res) => {
     const notifyEmail = request.technicalBy?.email || request.approvedBy?.email;
     if (notifyEmail) {
       try {
-        await sendStatusEmail({ recipientEmail:notifyEmail, subject:`✅ Delivery Confirmed — ${request.requestNumber}`, message:`Request <strong>#${request.requestNumber}</strong> to <strong>${request.toOrganization}</strong> has been <span style="color:#16a34a;font-weight:700;">confirmed as delivered</span> by <strong>${confirmedBy}</strong>.${missingItemsNote ? `<br><br><strong style="color:#dc2626;">Missing Items:</strong> ${missingItemsNote}` : ''}`, requestNumber:request.requestNumber });
+        await sendStatusEmail({ recipientEmail:notifyEmail, subject:`Delivery Confirmed — ${request.requestNumber}`, message:`Request <strong>#${request.requestNumber}</strong> to <strong>${request.toOrganization}</strong> has been <span style="color:#16a34a;font-weight:700;">confirmed as delivered</span> by <strong>${confirmedBy}</strong>.${missingItemsNote ? `<br><br><strong style="color:#dc2626;">Missing Items:</strong> ${missingItemsNote}` : ''}`, requestNumber:request.requestNumber });
       } catch(e){ console.error('Email:', e.message); }
     }
     res.json({ success: true, message: 'Delivery confirmed!', request: { requestNumber: request.requestNumber, confirmedAt: request.confirmedAt } });
