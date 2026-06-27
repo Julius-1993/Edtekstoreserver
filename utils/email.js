@@ -95,7 +95,7 @@ const sendDeliveryConfirmationEmail = async ({ request, recipientEmail, confirma
     from: process.env.EMAIL_FROM,
     to: recipientEmail,
     subject: `Delivery Confirmation Required — ${request.requestNumber}`,
-    text: `EDTEK Interactive Delivery Confirmation\n\nRequest ${request.requestNumber} has been delivered to ${request.toOrganization}.\n\nConfirm delivery here:\n${confirmUrl}\n\nItems:\n${request.items.map(i => `- ${i.name} (${i.serialNumber}) x${i.quantityApproved}`).join('\n')}\n\nLink expires in 72 hours.`,
+    text: `EDTEK Interactive Delivery Confirmation\n\nRequest ${request.requestNumber} has been delivered to ${request.toOrganization}.\n\nConfirm delivery here:\n${confirmUrl}\n\nItems:\n${request.items.map(i => `- ${i.name} (${i.serialNumber}) x${i.quantityApproved}`).join('\n')}\n\nLink expires in 7 days.`,
     html: `
 <!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
@@ -147,7 +147,7 @@ const sendDeliveryConfirmationEmail = async ({ request, recipientEmail, confirma
     </div>
 
     <p style="color:#94a3b8;font-size:12px;text-align:center;line-height:1.6;">
-      This link expires in <strong>72 hours</strong>.<br>
+      This link expires in <strong>7 days</strong>.<br>
       If any items are missing, you can add a note during confirmation.
     </p>
   </div>
